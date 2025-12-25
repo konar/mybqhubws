@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kindle Dashboard</title>
+    <style>
+        /* CSS Reset and Kindle Basics */
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: Helvetica, Arial, sans-serif;
+            background-color: #ffffff;
+            color: #000000;
+            overflow: hidden;
+            height: 100vh;
+            width: 100vw;
+            user-select: none;
+        }
+
+        /* Layout */
+        #container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            height: 100%;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        /* Date Header */
+        #date-header {
+            font-size: 3em;
+            /* Very large for visibility */
+            font-weight: bold;
+            text-align: center;
+            margin-bottom: 20px;
+            border-bottom: 3px solid #000;
+            width: 100%;
+            padding-bottom: 10px;
+        }
+
+        /* To-Do List */
+        #todo-list {
+            width: 100%;
+            flex-grow: 1;
+        }
+
+        .todo-item {
+            display: table;
+            /* Reliable older browser layout */
+            width: 100%;
+            border-bottom: 1px solid #999;
+            padding: 15px 0;
+            font-size: 2em;
+        }
+
+        .todo-priority {
+            display: table-cell;
+            width: 40px;
+            font-weight: bold;
+            vertical-align: middle;
+            padding-right: 15px;
+        }
+
+        .todo-desc {
+            display: table-cell;
+            vertical-align: middle;
+        }
+
+        /* Priority Styling */
+        .priority-P0 {
+            font-weight: 900;
+        }
+
+        /* Most important */
+        .priority-P1 {
+            font-weight: normal;
+        }
+
+        .priority-P2 {
+            font-weight: lighter;
+            color: #555;
+        }
+
+        /* Keep Awake / Status */
+        #status-bar {
+            font-size: 0.8em;
+            color: #888;
+            margin-top: 10px;
+            text-align: center;
+        }
+
+        /* Error Message */
+        #error-msg {
+            display: none;
+            color: black;
+            font-weight: bold;
+            font-size: 1.5em;
+            margin-top: 20px;
+            border: 2px solid black;
+            padding: 10px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="container">
+        <div id="date-header">Loading...</div>
+        <div id="error-msg"></div>
+        <div id="todo-list"></div>
+        <div id="status-bar">Initializing...</div>
+    </div>
+
+    <script>
+        // CONFIG
+        var POLL_INTERVAL = 5 * 60 * 1000; // 5 minutes
+        var CLOCK_INTERVAL = 60 * 1000; // 1 minute
+        var AWAKE_INTERVAL = 30 * 1000; // 30 seconds
+        var SHEET_ID = "1cJj0Nfm3mq2S-KtJqcMh7meQFvavxzlqPWPmx37IVfk";
+
+        // STATE
+        var lastFetchTime = 0;
+
+        // ELEMENTS
+        var elDate = document.getElementById('date-header');
+        var elList = document.getElementById('todo-list');
+        var elStatus = document.getElementById('status-bar');
+        var elError = document.getElementById('error-msg');
+
+        // --- UTILS (ES5) ---
+
+        function getPSTDate() {
+            var now = new Date();
+            // Try standard Intl first
+            try {
+                // Check if environment supports timeZone in toLocaleString
+                var test = now.toLocaleString('en-US', { timeZone: 'America/Los_Angeles' });
+                // If we are here, it likely works. But to get a Date object back is hard in ES5 without parsing string.
+                // So we will stick to string formatting for the UI.
+                return now;
+            } catch (e) {
+                // Fallback: Manual offset for Kindles that are in UTC or wrong zone
+                // PST is UTC-8, PDT is UTC-7. 
+                // Simple approx: treat as -8 (Standard) for safety or use user config.
+                // Better approach: just return 'now' and use toLocaleString in formatting below.
+            }
+            return now;
+        }
+
+        function updateDate() {
+            var now = new Date();
+            var options = { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric', timeZone: 'America/Los_Angeles' };
+
+            try {
+                // Modern browsers / correct Kindles
+                elDate.textContent = now.toLocaleDateString('en-US', options);
+            } catch (e) {
+                // Fallback if Intl fails: Manual UTC-8 (PST) calculation
+                // 1. Get UTC time
+                var utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+                // 2. Add -8 hours
+                var pst = new Date(utc + (3600000 * -8));
+                elDate.textContent = pst.toDateString() + " (PST)";
+            }
+        }
+
+        function updateStatus(msg) {
+            var now = new Date();
+            var timeStr = "";
+
+            try {
+                // Try PST time string
+                timeStr = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'America/Los_Angeles' });
+            } catch (e) {
+                // Fallback
+                var utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+                var pst = new Date(utc + (3600000 * -8));
+                var h = pst.getHours();
+                var m = pst.getMinutes();
+                timeStr = h + ':' + (m < 10 ? '0' : '') + m;
+            }
+
+            elStatus.textContent = msg + " [ Last Check: " + timeStr + " ]";
+        }
+
+        function showError(msg) {
+            elError.style.display = 'block';
+            elError.textContent = "Error: " + msg;
+        }
+
+        function hideError() {
+            elError.style.display = 'none';
+        }
+
+        // --- DATA FETCHING (JSONP) ---
+
+        // Global callback for JSONP
+        window.handleGvizResponse = function (json) {
+            hideError();
+            updateStatus("Updated");
+
+            try {
+                var rows = json.table.rows;
+                var items = [];
+
+                for (var i = 0; i < rows.length; i++) {
+                    var row = rows[i];
+                    // Col 0: Priority, Col 1: Description
+                    // Check for null cells
+                    var pCell = row.c[0];
+                    var dCell = row.c[1];
+
+                    var p = pCell ? (pCell.v || "") : "";
+                    var d = dCell ? (dCell.v || "") : "";
+
+                    // Skip empty rows or headers if they sneaked in
+                    if (p === "Priority" && d === "Description") continue;
+                    if (!p && !d) continue;
+
+                    items.push({ p: p, d: d });
+                }
+
+                // Sort: P0 > P1 > P2 > P3
+                items.sort(function (a, b) {
+                    return (a.p || "").localeCompare(b.p || "");
+                });
+
+                renderList(items);
+
+            } catch (e) {
+                showError("Parse Failed");
+                // console.error(e);
+            }
+        };
+
+        function fetchData() {
+            updateStatus("Refreshing...");
+
+            // Remove old script if exists
+            var oldScript = document.getElementById('gviz-script');
+            if (oldScript) {
+                oldScript.parentNode.removeChild(oldScript);
+            }
+
+            var script = document.createElement('script');
+            script.id = 'gviz-script';
+            // JSONP URL
+            var url = "https://docs.google.com/spreadsheets/d/" + SHEET_ID + "/gviz/tq?tqx=responseHandler:handleGvizResponse&gid=0&t=" + new Date().getTime();
+
+            script.src = url;
+            script.onerror = function () {
+                showError("Network Error");
+                updateStatus("Net Error");
+            };
+
+            document.body.appendChild(script);
+        }
+
+        function renderList(items) {
+            elList.innerHTML = ''; // Clear
+
+            for (var i = 0; i < items.length; i++) {
+                var item = items[i];
+                var div = document.createElement('div');
+                div.className = 'todo-item';
+
+                // Truncate desc to ~6 words
+                var words = item.d.split(' ');
+                var displayDesc = item.d;
+                if (words.length > 6) {
+                    displayDesc = words.slice(0, 6).join(' ') + '...';
+                }
+
+                var pClass = 'priority-' + item.p; // e.g. priority-P0
+
+                div.innerHTML =
+                    '<div class="todo-priority ' + pClass + '">' + item.p + '</div>' +
+                    '<div class="todo-desc">' + displayDesc + '</div>';
+
+                elList.appendChild(div);
+            }
+        }
+
+        // --- KEEP AWAKE ---
+
+        // --- KEEP AWAKE ---
+
+        function keepAwake() {
+            // Strategy 1: Visible DOM change (Pixel toggle)
+            var dot = document.getElementById('awake-dot');
+            if (!dot) {
+                dot = document.createElement('span');
+                dot.id = 'awake-dot';
+                dot.textContent = '.';
+                dot.style.color = '#fff'; // Invisible on white bg
+                document.body.appendChild(dot);
+            }
+            dot.style.display = (dot.style.display === 'none' ? 'inline' : 'none');
+
+            // Strategy 2: Simulate User Interaction (Touch/Mouse events)
+            // This attempts to reset the device idle timer
+            try {
+                if (document.createEvent) {
+                    var el = document.body;
+
+                    // Simulate Touch
+                    var touchEvent = document.createEvent('UIEvents');
+                    touchEvent.initUIEvent('touchstart', true, true, window, 1);
+                    el.dispatchEvent(touchEvent);
+
+                    // Simulate Click
+                    var clickEvent = document.createEvent('MouseEvents');
+                    clickEvent.initMouseEvent('click', true, true, window, 1, 0, 0, 0, 0, false, false, false, false, 0, null);
+                    el.dispatchEvent(clickEvent);
+
+                    // console.log('Simulated touch/click');
+                }
+            } catch (e) {
+                // Ignore errors on very old browsers
+            }
+        }
+
+        // --- INITIALIZATION ---
+
+        function init() {
+            updateDate();
+            fetchData(); // Initial Fetch
+
+            // Timers
+            setInterval(fetchData, POLL_INTERVAL);
+            setInterval(updateDate, CLOCK_INTERVAL);
+            setInterval(keepAwake, AWAKE_INTERVAL);
+        }
+
+        // Start
+        init();
+
+    </script>
+</body>
+
+</html>
