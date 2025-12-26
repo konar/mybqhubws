@@ -32,14 +32,28 @@
 
         /* Date Header */
         #date-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            /* Align vertically */
             font-size: 3em;
             /* Very large for visibility */
             font-weight: bold;
-            text-align: center;
             margin-bottom: 20px;
             border-bottom: 3px solid #000;
             width: 100%;
             padding-bottom: 10px;
+        }
+
+        #header-date {
+            text-align: left;
+        }
+
+        #header-countdown {
+            text-align: left;
+            font-variant-numeric: tabular-nums;
+            white-space: nowrap;
+            /* Keep on one line if possible */
         }
 
         /* To-Do List */
@@ -109,7 +123,10 @@
 <body>
 
     <div id="container">
-        <div id="date-header">Loading...</div>
+        <div id="date-header">
+            <div id="header-date">Loading...</div>
+            <div id="header-countdown"></div>
+        </div>
         <div id="error-msg"></div>
         <div id="todo-list"></div>
         <div id="status-bar">Initializing...</div>
@@ -118,7 +135,7 @@
     <script>
         // CONFIG
         var POLL_INTERVAL = 5 * 60 * 1000; // 5 minutes
-        var CLOCK_INTERVAL = 60 * 1000; // 1 minute
+        var CLOCK_INTERVAL = 1000; // 1 second
         var AWAKE_INTERVAL = 30 * 1000; // 30 seconds
         var SHEET_ID = "1cJj0Nfm3mq2S-KtJqcMh7meQFvavxzlqPWPmx37IVfk";
 
@@ -126,7 +143,8 @@
         var lastFetchTime = 0;
 
         // ELEMENTS
-        var elDate = document.getElementById('date-header');
+        var elHeaderDate = document.getElementById('header-date');
+        var elHeaderCountdown = document.getElementById('header-countdown');
         var elList = document.getElementById('todo-list');
         var elStatus = document.getElementById('status-bar');
         var elError = document.getElementById('error-msg');
@@ -153,19 +171,45 @@
 
         function updateDate() {
             var now = new Date();
-            var options = { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric', timeZone: 'America/Los_Angeles' };
+            var dateStr = "";
+            var secondsLeft = 0;
 
             try {
-                // Modern browsers / correct Kindles
-                elDate.textContent = now.toLocaleDateString('en-US', options);
-            } catch (e) {
                 // Fallback if Intl fails: Manual UTC-8 (PST) calculation
                 // 1. Get UTC time
                 var utc = now.getTime() + (now.getTimezoneOffset() * 60000);
                 // 2. Add -8 hours
                 var pst = new Date(utc + (3600000 * -8));
-                elDate.textContent = pst.toDateString() + " (PST)";
+                dateStr = pst.toDateString();
+
+                var h = pst.getHours();
+                var m = pst.getMinutes();
+                var s = pst.getSeconds();
+                var elapsed = (h * 3600) + (m * 60) + s;
+                secondsLeft = 86400 - elapsed;
+            } catch (e) {
+                // Fallback if Intl fails: Manual UTC-8 (PST) calculation
+                // 1. Get UTC time 
+                var utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+                // 2. Add -8 hours
+                var pst = new Date(utc + (3600000 * -8));
+
+                // Format: Thu 12/25
+                var parts = pst.toDateString().split(' '); // Thu Dec 25 2025
+                var dayName = parts[0];
+                var month = pst.getMonth() + 1;
+                var date = pst.getDate();
+                dateStr = dayName + " " + month + "/" + date;
+
+                var h = pst.getHours();
+                var m = pst.getMinutes();
+                var s = pst.getSeconds();
+                var elapsed = (h * 3600) + (m * 60) + s;
+                secondsLeft = 86400 - elapsed;
             }
+
+            if (elHeaderDate) elHeaderDate.textContent = dateStr;
+            if (elHeaderCountdown) elHeaderCountdown.textContent = secondsLeft + " seconds left";
         }
 
         function updateStatus(msg) {
