@@ -3,10 +3,15 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <title>Kindle Dashboard</title>
     <style>
         /* CSS Reset and Kindle Basics */
+        html {
+            overflow: hidden;
+            background-color: #ffffff;
+        }
+
         body {
             margin: 0;
             padding: 0;
@@ -17,16 +22,53 @@
             height: 100vh;
             width: 100vw;
             user-select: none;
+            font-size: 150%;
+            /* Increased by another 30% */
+        }
+
+        /* Prevent Focus Outlines (Kindle black border on click) */
+        * {
+            outline: none !important;
+            -webkit-tap-highlight-color: rgba(0, 0, 0, 0);
+        }
+
+        /* Ensure injected scripts/hidden elements don't break layout */
+        script,
+        #awake-dot,
+        .hidden-fix {
+            display: none !important;
+            width: 0;
+            height: 0;
+            overflow: hidden;
+            position: absolute;
         }
 
         /* Layout */
         #container {
+            /* Rotation for Landscape-only devices held in Portrait */
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 100vh;
+            height: 100vw;
+            /* Transform handled by JS for precise legacy support */
+
+            /* Layout */
+            display: -webkit-box;
+            display: -webkit-flex;
             display: flex;
+            -webkit-flex-direction: column;
+            -webkit-box-orient: vertical;
+            -webkit-box-direction: normal;
             flex-direction: column;
+            -webkit-align-items: center;
+            -webkit-box-align: center;
             align-items: center;
+            -webkit-justify-content: flex-start;
+            -webkit-box-pack: start;
             justify-content: flex-start;
-            height: 100%;
-            padding: 20px;
+            padding: 5px;
+            /* Reduced padding to minimize blank space */
             box-sizing: border-box;
         }
 
@@ -40,9 +82,17 @@
             /* Very large for visibility */
             font-weight: bold;
             margin-bottom: 20px;
-            border-bottom: 3px solid #000;
             width: 100%;
-            padding-bottom: 10px;
+            padding-bottom: 1px;
+            border: none !important;
+            /* Force removal */
+        }
+
+        /* Hide Scrollbars */
+        ::-webkit-scrollbar {
+            width: 0px;
+            background: transparent;
+            display: none;
         }
 
         #header-date {
@@ -50,7 +100,7 @@
         }
 
         #header-countdown {
-            text-align: left;
+            text-align: right;
             font-variant-numeric: tabular-nums;
             white-space: nowrap;
             /* Keep on one line if possible */
@@ -67,7 +117,7 @@
             /* Reliable older browser layout */
             width: 100%;
             border-bottom: 1px solid #999;
-            padding: 15px 0;
+            padding: 1px 0;
             font-size: 2em;
         }
 
@@ -99,6 +149,51 @@
             color: #555;
         }
 
+        /* Enforced Portrait Mode */
+        #date-header {
+            display: -webkit-box;
+            display: -webkit-flex;
+            display: flex;
+
+            -webkit-flex-direction: row;
+            -webkit-box-orient: horizontal;
+            -webkit-box-direction: normal;
+            flex-direction: row;
+
+            -webkit-justify-content: space-between;
+            -webkit-box-pack: justify;
+            justify-content: space-between;
+
+            -webkit-align-items: center;
+            -webkit-box-align: center;
+            align-items: center;
+
+            font-size: 2em;
+            width: 100%;
+            /* Ensure width is explicit */
+        }
+
+        #header-date {
+            text-align: left;
+            width: auto;
+            margin-bottom: 0;
+        }
+
+        #header-countdown {
+            text-align: right;
+            width: auto;
+            margin-bottom: 0;
+            font-size: 0.8em;
+            /* Slightly smaller to fit */
+        }
+
+
+
+        .todo-item {
+            font-size: 1.5em;
+            /* Smaller font for remaining items */
+        }
+
         /* Keep Awake / Status */
         #status-bar {
             font-size: 0.8em;
@@ -127,9 +222,9 @@
             <div id="header-date">Loading...</div>
             <div id="header-countdown"></div>
         </div>
-        <div id="error-msg"></div>
         <div id="todo-list"></div>
         <div id="status-bar">Initializing...</div>
+        <div id="error-msg"></div>
     </div>
 
     <script>
@@ -151,82 +246,48 @@
 
         // --- UTILS (ES5) ---
 
-        function getPSTDate() {
-            var now = new Date();
-            // Try standard Intl first
-            try {
-                // Check if environment supports timeZone in toLocaleString
-                var test = now.toLocaleString('en-US', { timeZone: 'America/Los_Angeles' });
-                // If we are here, it likely works. But to get a Date object back is hard in ES5 without parsing string.
-                // So we will stick to string formatting for the UI.
-                return now;
-            } catch (e) {
-                // Fallback: Manual offset for Kindles that are in UTC or wrong zone
-                // PST is UTC-8, PDT is UTC-7. 
-                // Simple approx: treat as -8 (Standard) for safety or use user config.
-                // Better approach: just return 'now' and use toLocaleString in formatting below.
-            }
-            return now;
-        }
+
 
         function updateDate() {
             var now = new Date();
             var dateStr = "";
             var secondsLeft = 0;
 
-            try {
-                // Fallback if Intl fails: Manual UTC-8 (PST) calculation
-                // 1. Get UTC time
-                var utc = now.getTime() + (now.getTimezoneOffset() * 60000);
-                // 2. Add -8 hours
-                var pst = new Date(utc + (3600000 * -8));
-                dateStr = pst.toDateString();
+            // Manual UTC-8 (PST) calculation for legacy browsers
+            // 1. Get UTC time
+            var utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+            // 2. Add -8 hours
+            var pst = new Date(utc + (3600000 * -8));
 
-                var h = pst.getHours();
-                var m = pst.getMinutes();
-                var s = pst.getSeconds();
-                var elapsed = (h * 3600) + (m * 60) + s;
-                secondsLeft = 86400 - elapsed;
-            } catch (e) {
-                // Fallback if Intl fails: Manual UTC-8 (PST) calculation
-                // 1. Get UTC time 
-                var utc = now.getTime() + (now.getTimezoneOffset() * 60000);
-                // 2. Add -8 hours
-                var pst = new Date(utc + (3600000 * -8));
+            // Format: Thu 12/25
+            var parts = pst.toDateString().split(' '); // Thu Dec 25 2025
+            var dayName = parts[0];
+            var month = pst.getMonth() + 1;
+            var date = pst.getDate();
+            dateStr = dayName + " " + month + "/" + date;
 
-                // Format: Thu 12/25
-                var parts = pst.toDateString().split(' '); // Thu Dec 25 2025
-                var dayName = parts[0];
-                var month = pst.getMonth() + 1;
-                var date = pst.getDate();
-                dateStr = dayName + " " + month + "/" + date;
-
-                var h = pst.getHours();
-                var m = pst.getMinutes();
-                var s = pst.getSeconds();
-                var elapsed = (h * 3600) + (m * 60) + s;
-                secondsLeft = 86400 - elapsed;
-            }
+            var h = pst.getHours();
+            var m = pst.getMinutes();
+            var s = pst.getSeconds();
+            var elapsed = (h * 3600) + (m * 60) + s;
+            secondsLeft = 86400 - elapsed;
 
             if (elHeaderDate) elHeaderDate.textContent = dateStr;
-            if (elHeaderCountdown) elHeaderCountdown.textContent = secondsLeft + " seconds left";
+            if (elHeaderCountdown) elHeaderCountdown.textContent = secondsLeft + " sec left";
         }
 
         function updateStatus(msg) {
             var now = new Date();
             var timeStr = "";
 
-            try {
-                // Try PST time string
-                timeStr = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'America/Los_Angeles' });
-            } catch (e) {
-                // Fallback
-                var utc = now.getTime() + (now.getTimezoneOffset() * 60000);
-                var pst = new Date(utc + (3600000 * -8));
-                var h = pst.getHours();
-                var m = pst.getMinutes();
-                timeStr = h + ':' + (m < 10 ? '0' : '') + m;
-            }
+            // Manual UTC-8 (PST) calculation
+            var utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+            var pst = new Date(utc + (3600000 * -8));
+            var h = pst.getHours();
+            var m = pst.getMinutes();
+            // Pad minutes
+            var mStr = m < 10 ? '0' + m : m;
+            timeStr = h + ':' + mStr;
 
             elStatus.textContent = msg + " [ Last Check: " + timeStr + " ]";
         }
@@ -334,43 +395,79 @@
         // --- KEEP AWAKE ---
 
         function keepAwake() {
-            // Strategy 1: Visible DOM change (Pixel toggle)
+            // Strategy 1: Hidden state toggle (force repaint without layout shift)
             var dot = document.getElementById('awake-dot');
             if (!dot) {
-                dot = document.createElement('span');
+                dot = document.createElement('div');
                 dot.id = 'awake-dot';
-                dot.textContent = '.';
-                dot.style.color = '#fff'; // Invisible on white bg
+                dot.className = 'hidden-fix';
+                // Styles managed in CSS to be absolutely hidden
                 document.body.appendChild(dot);
             }
-            dot.style.display = (dot.style.display === 'none' ? 'inline' : 'none');
-
-            // Strategy 2: Simulate User Interaction (Touch/Mouse events)
-            // This attempts to reset the device idle timer
-            try {
-                if (document.createEvent) {
-                    var el = document.body;
-
-                    // Simulate Touch
-                    var touchEvent = document.createEvent('UIEvents');
-                    touchEvent.initUIEvent('touchstart', true, true, window, 1);
-                    el.dispatchEvent(touchEvent);
-
-                    // Simulate Click
-                    var clickEvent = document.createEvent('MouseEvents');
-                    clickEvent.initMouseEvent('click', true, true, window, 1, 0, 0, 0, 0, false, false, false, false, 0, null);
-                    el.dispatchEvent(clickEvent);
-
-                    // console.log('Simulated touch/click');
-                }
-            } catch (e) {
-                // Ignore errors on very old browsers
-            }
+            // Toggle something irrelevant to trigger repaint
+            dot.style.opacity = (dot.style.opacity === '0.01' ? '0.02' : '0.01');
         }
+
+        // --- LAYOUT FIXES ---
+        function resizeContainer() {
+            // Force container to match swapped screen dimensions
+            // We want Visual Width = Window Width
+            // Visual Height = Window Height
+
+            // Logical Width = Visual Height
+            var w = window.innerHeight;
+            // Logical Height = Visual Width
+            var h = window.innerWidth;
+
+            var container = document.getElementById('container');
+
+            // Subtract 2px to ensure we are strictly inside the viewport and don't trigger scrollbars
+            container.style.width = (w - 2) + 'px';
+            container.style.height = (h - 2) + 'px';
+            container.style.position = 'fixed';
+            container.style.top = '0px';
+            container.style.left = '0px';
+
+            // Reset transforms to base state + new rotation logic
+            // Strategy: Anchor Top-Left (0,0). 
+            // 1. Pivot at 0,0.
+            // 2. Shift Left by Width (translateX(-100%)) so Top-Right is at 0,0.
+            // 3. Rotate 270deg around 0,0.
+            // Result: Fills the screen starting from 0,0 downwards/rightwards.
+
+            container.style.transformOrigin = '0% 0%';
+            container.style.webkitTransformOrigin = '0% 0%';
+
+            // Logic:
+            // 1. We start at 0,0.
+            // 2. We want to Rotate 270 (CW).
+            //    This throws the element upwards (negative Y).
+            //    Rotate 270 means X axis becomes -Y axis.
+            // 3. To compensate, we need to push it DOWN by the WIDTH of the container.
+            //    Translation applies in the screen coordinate system if done before rotation? 
+            //    Actually, lets rely on standard matrix order: Translate * Rotate.
+            //    Translate (move origin) -> then Rotate around new origin.
+
+            var transform = 'translate(0px, ' + w + 'px) rotate(270deg)';
+
+            container.style.transform = transform;
+            container.style.webkitTransform = transform;
+            container.style.mozTransform = transform;
+            container.style.msTransform = transform;
+            container.style.oTransform = transform;
+
+
+            // var debugMsg = "Win:" + window.innerWidth + "x" + window.innerHeight;
+            // updateStatus("Reflow V2 " + debugMsg);
+        }
+
+        window.onresize = resizeContainer;
 
         // --- INITIALIZATION ---
 
         function init() {
+            // Delay resize slightly to ensure viewport meta applies
+            setTimeout(resizeContainer, 100);
             updateDate();
             fetchData(); // Initial Fetch
 
