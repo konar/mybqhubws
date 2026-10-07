@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head><title>Fullscreen Test</title></head>
+<body style="background:#222;color:#fff;font-size:3rem;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;font-family:sans-serif;">
+  <div id="msg">Double-click anywhere</div>
+  <script>
+    const msg = document.getElementById('msg');
+    let clickCount = 0;
+
+    // Test 1: native dblclick
+    document.addEventListener('dblclick', () => {
+      msg.textContent = 'dblclick fired! Requesting fullscreen...';
+      const el = document.documentElement;
+      const fn = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
+      if (fn) {
+        fn.call(el).then(() => {
+          msg.textContent = 'FULLSCREEN SUCCESS!';
+        }).catch(err => {
+          msg.textContent = 'Fullscreen REJECTED: ' + err;
+        });
+      } else {
+        msg.textContent = 'No fullscreen API found!';
+      }
+    });
+
+    // Test 2: manual click-based detection as fallback
+    let lastClick = 0;
+    document.addEventListener('click', () => {
+      clickCount++;
+      const now = Date.now();
+      if (now - lastClick < 500) {
+        msg.textContent = 'Manual double-click detected (click #' + clickCount + ')';
+      } else {
+        msg.textContent = 'Single click #' + clickCount + ' (click again fast for double)';
+      }
+      lastClick = now;
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,250 @@
+/* ═══════════════════════════════════════════════════════════════════
+   Ambient Kiosk — style.css
+   Screen-filling kiosk. Text sized in vh so it FILLS the viewport.
+   ═══════════════════════════════════════════════════════════════════ */
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background: #16213e;
+  color: #eef1f6;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+#kiosk, #activate-overlay {
+  cursor: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+#kiosk:active { cursor: default; }
+
+/* ─── KIOSK: 3-row grid fills the whole screen ──────────────────── */
+#kiosk {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  height: 100vh;
+  padding: 0 clamp(1rem, 2.5vw, 2.5rem);
+}
+
+/* ─── HEADER ────────────────────────────────────────────────────── */
+#header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.2vh 0;
+  border-bottom: 1px solid rgba(255,255,255,0.07);
+}
+
+#date-display {
+  font-size: clamp(1.2rem, 3vw, 2.4rem);
+  font-weight: 400;
+  color: rgba(238,241,246,0.7);
+}
+
+#clock-display {
+  font-size: clamp(1.6rem, 4.5vw, 4rem);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: #fff;
+}
+
+.clock-sep {
+  opacity: 0.4;
+  animation: blink 1s step-end infinite;
+}
+@keyframes blink { 50% { opacity: 0; } }
+
+/* ─── NOW AREA: fills ALL remaining vertical space ──────────────── */
+#now-area {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;       /* vertically center the content cluster */
+  gap: 1vh;
+  min-height: 0;
+  padding: 1vh 0;
+}
+
+/* NOW title: sized with vh so it grows with screen height */
+#now-title {
+  font-size: clamp(3rem, 12vh, 10rem);
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+  color: #fff;
+}
+
+/* Progress */
+#progress-row {
+  display: flex;
+  align-items: center;
+  gap: clamp(8px, 1.5vw, 20px);
+}
+
+#progress-bar {
+  flex: 1;
+  height: clamp(5px, 0.8vh, 12px);
+  background: rgba(238,241,246,0.1);
+  border-radius: 999px;
+  position: relative;
+  overflow: hidden;
+}
+
+#progress-fill {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #818cf8, #a78bfa, #c084fc);
+  border-radius: 999px;
+  transition: width 1s linear;
+}
+
+#progress-glow {
+  position: absolute;
+  top: -2px;
+  height: calc(100% + 4px);
+  width: 36px;
+  left: 0;
+  background: radial-gradient(circle, rgba(167,139,250,0.7) 0%, transparent 70%);
+  border-radius: 50%;
+  transition: left 1s linear;
+  pointer-events: none;
+}
+
+#time-remaining {
+  font-size: clamp(1.2rem, 4vh, 3rem);
+  font-weight: 600;
+  color: rgba(238,241,246,0.85);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ─── UP NEXT AREA ──────────────────────────────────────────────── */
+#next-area {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5vh;
+  padding: 1.5vh 0;
+  border-top: 1px solid rgba(255,255,255,0.07);
+}
+
+#next-title {
+  font-size: clamp(1.8rem, 6vh, 5rem);
+  font-weight: 600;
+  color: #b4b8c8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+/* ─── Badges ────────────────────────────────────────────────────── */
+.section-badge {
+  display: flex;
+  align-items: center;
+  gap: clamp(5px, 0.7vw, 10px);
+  font-size: clamp(0.8rem, 2vh, 1.6rem);
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.badge-dot {
+  width: clamp(7px, 1.2vw, 14px);
+  height: clamp(7px, 1.2vw, 14px);
+  border-radius: 50%;
+}
+
+.now-dot {
+  background: #818cf8;
+  box-shadow: 0 0 10px rgba(129,140,248,0.7), 0 0 25px rgba(129,140,248,0.3);
+  animation: dot-glow 2s ease-in-out infinite;
+}
+@keyframes dot-glow {
+  50% { box-shadow: 0 0 18px rgba(129,140,248,1), 0 0 45px rgba(129,140,248,0.5); }
+}
+.now-badge .badge-label { color: #c7d2fe; }
+.now-badge .badge-time  { color: rgba(238,241,246,0.5); font-weight: 400; }
+
+.next-dot { background: #6B7280; }
+.next-badge .badge-label { color: #9CA3AF; }
+.next-badge .badge-time  { color: rgba(238,241,246,0.35); font-weight: 400; }
+
+/* ─── State variants ────────────────────────────────────────────── */
+#now-title.free-time {
+  color: rgba(238,241,246,0.4);
+  font-weight: 300;
+  font-style: italic;
+}
+#now-title.day-complete {
+  color: rgba(74,222,128,0.7);
+  font-weight: 300;
+  font-style: italic;
+}
+#next-title.no-next {
+  color: rgba(238,241,246,0.2);
+  font-style: italic;
+}
+
+/* ─── Overlay ───────────────────────────────────────────────────── */
+#activate-overlay {
+  position: fixed; inset: 0; z-index: 10000;
+  background: rgba(22,33,62,0.95);
+  display: flex; align-items: center; justify-content: center;
+  transition: opacity 0.5s ease, visibility 0.5s ease;
+}
+#activate-overlay.hidden {
+  opacity: 0; visibility: hidden; pointer-events: none;
+}
+.activate-content {
+  display: flex; flex-direction: column; align-items: center; gap: 1.5rem;
+}
+.activate-pulse {
+  width: clamp(50px, 10vw, 100px); height: clamp(50px, 10vw, 100px);
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(74,222,128,0.4) 0%, transparent 70%);
+  border: 2px solid rgba(74,222,128,0.6);
+  animation: pulse-ring 2s ease-in-out infinite;
+}
+.activate-label {
+  font-size: clamp(1.2rem, 3vw, 2.5rem); font-weight: 300;
+  color: rgba(238,241,246,0.8); letter-spacing: 0.15em; text-transform: uppercase;
+}
+@keyframes pulse-ring {
+  0%, 100% { transform: scale(1); opacity: 0.7; }
+  50%      { transform: scale(1.15); opacity: 1; }
+}
+
+/* ─── Fixed indicators ──────────────────────────────────────────── */
+#guard-status {
+  position: fixed; bottom: 6px; left: 10px; z-index: 9999;
+  display: flex; align-items: center; gap: 5px;
+  font-size: 10px; font-family: monospace;
+  color: rgba(238,241,246,0.25);
+}
+#guard-status.active { color: rgba(74,222,128,0.7); }
+.guard-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: rgba(238,241,246,0.2);
+}
+#guard-status.active .guard-dot {
+  background: #4ade80; box-shadow: 0 0 5px rgba(74,222,128,0.5);
+}
+#data-status {
+  position: fixed; bottom: 6px; right: 10px; z-index: 9999;
+  font-size: 10px; font-family: monospace;
+  color: rgba(238,241,246,0.2);
+}
+
+/* ─── Animation ─────────────────────────────────────────────────── */
+.fade-in { animation: fadeIn 0.5s ease forwards; }
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(5px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
