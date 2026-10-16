@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="style.css?v=9" />
 </head>
 <body>
 
@@ -27,43 +27,70 @@
   <!-- ============ KIOSK LAYOUT ============ -->
   <div id="kiosk">
 
-    <!-- HEADER: date + clock -->
-    <div id="header-row">
-      <div id="date-display"></div>
-      <div id="clock-display">
-        <span id="clock-hh">00</span><span class="clock-sep">:</span><span id="clock-mm">00</span><span class="clock-sep">:</span><span id="clock-ss">00</span>
-      </div>
-    </div>
-
-    <!-- NOW: badge + giant title + progress (fills remaining space) -->
-    <div id="now-area">
-      <div class="section-badge now-badge">
-        <span class="badge-dot now-dot"></span>
-        <span class="badge-label">NOW</span>
-        <span class="badge-time" id="now-time-range"></span>
-      </div>
-      <h1 id="now-title">Loading…</h1>
-      <div id="progress-row">
-        <div id="progress-bar">
-          <div id="progress-fill"></div>
-          <div id="progress-glow"></div>
+    <!-- LEFT COLUMN: Clock + NOW task -->
+    <div id="col-left">
+      <!-- Giant clock -->
+      <div id="clock-block">
+        <div id="clock-display">
+          <span id="clock-hh">00</span><span class="clock-sep">:</span><span id="clock-mm">00</span><span class="clock-sep">:</span><span id="clock-ss">00</span>
         </div>
-        <div id="time-remaining"></div>
+        <div id="date-display"></div>
+      </div>
+
+      <!-- NOW section -->
+      <div id="now-block">
+        <div class="section-badge now-badge">
+          <span class="badge-dot now-dot"></span>
+          <span class="badge-label">NOW</span>
+          <span class="badge-time" id="now-time-range"></span>
+        </div>
+        <h1 id="now-title">Loading…</h1>
+        <div id="progress-row">
+          <div id="progress-bar">
+            <div id="progress-fill"></div>
+            <div id="progress-glow"></div>
+          </div>
+          <div id="time-remaining"></div>
+        </div>
       </div>
     </div>
 
-    <!-- UP NEXT: badge + title -->
-    <div id="next-area">
-      <div class="section-badge next-badge">
-        <span class="badge-dot next-dot"></span>
-        <span class="badge-label">UP NEXT</span>
-        <span class="badge-time" id="next-time-range"></span>
+    <!-- RIGHT COLUMN: UP NEXT + Today's timeline -->
+    <div id="col-right">
+      <!-- UP NEXT -->
+      <div id="next-block">
+        <div class="section-badge next-badge">
+          <span class="badge-dot next-dot"></span>
+          <span class="badge-label">UP NEXT</span>
+          <span class="badge-time" id="next-time-range"></span>
+        </div>
+        <h2 id="next-title">—</h2>
       </div>
-      <h2 id="next-title">—</h2>
+
+      <!-- Today's remaining schedule -->
+      <div id="agenda-block">
+        <div class="section-badge agenda-badge">
+          <span class="badge-dot agenda-dot"></span>
+          <span class="badge-label">TODAY</span>
+        </div>
+        <ul id="agenda-list"></ul>
+      </div>
     </div>
 
   </div>
 
-  <script src="app.js"></script>
+  <!-- Inline fullscreen — identical to test.html, cannot be cached separately -->
+  <script>
+    document.addEventListener('dblclick', function() {
+      var el = document.documentElement;
+      var isFS = document.fullscreenElement || document.webkitFullscreenElement;
+      if (isFS) {
+        (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+      } else {
+        (el.requestFullscreen || el.webkitRequestFullscreen).call(el);
+      }
+    });
+  </script>
+  <script src="app.js?v=9"></script>
 </body>
 </html>

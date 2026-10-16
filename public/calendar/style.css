@@ -1,6 +1,7 @@
 /* ═══════════════════════════════════════════════════════════════════
    Ambient Kiosk — style.css
-   Screen-filling kiosk. Text sized in vh so it FILLS the viewport.
+   Two-column layout: Clock+NOW on left, NEXT+Agenda on right.
+   Every pixel used. Designed for 14" laptop & 15.6" Portal Plus.
    ═══════════════════════════════════════════════════════════════════ */
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -15,64 +16,77 @@ html, body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* cursor:none for kiosk mode — NO user-select:none anywhere
+   (it kills dblclick in Chromium) */
 #kiosk, #activate-overlay {
   cursor: none;
-  -webkit-user-select: none;
-  user-select: none;
 }
 #kiosk:active { cursor: default; }
 
-/* ─── KIOSK: 3-row grid fills the whole screen ──────────────────── */
+/* ─── KIOSK: two-column grid ────────────────────────────────────── */
 #kiosk {
   display: grid;
-  grid-template-rows: auto 1fr auto;
+  grid-template-columns: 1.4fr 1fr;
   height: 100vh;
-  padding: 0 clamp(1rem, 2.5vw, 2.5rem);
+  gap: 0;
 }
 
-/* ─── HEADER ────────────────────────────────────────────────────── */
-#header-row {
+/* ─── LEFT COLUMN: clock + NOW ──────────────────────────────────── */
+#col-left {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 1.2vh 0;
-  border-bottom: 1px solid rgba(255,255,255,0.07);
+  flex-direction: column;
+  padding: 2.5vh 3vw;
+  gap: 2vh;
 }
 
-#date-display {
-  font-size: clamp(1.2rem, 3vw, 2.4rem);
-  font-weight: 400;
-  color: rgba(238,241,246,0.7);
+/* Clock block */
+#clock-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3vh;
 }
 
 #clock-display {
-  font-size: clamp(1.6rem, 4.5vw, 4rem);
-  font-weight: 700;
+  font-size: clamp(3.5rem, 11vw, 10rem);
+  font-weight: 800;
   font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  line-height: 0.9;
   color: #fff;
 }
 
-.clock-sep {
+#clock-ss {
+  font-weight: 300;
   opacity: 0.4;
+}
+
+.clock-sep {
+  opacity: 0.3;
   animation: blink 1s step-end infinite;
 }
 @keyframes blink { 50% { opacity: 0; } }
 
-/* ─── NOW AREA: fills ALL remaining vertical space ──────────────── */
-#now-area {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;       /* vertically center the content cluster */
-  gap: 1vh;
-  min-height: 0;
-  padding: 1vh 0;
+#date-display {
+  font-size: clamp(1rem, 2.5vw, 2rem);
+  font-weight: 400;
+  color: rgba(238,241,246,0.5);
+  margin-top: 0.5vh;
 }
 
-/* NOW title: sized with vh so it grows with screen height */
+/* NOW block — sits right under the date, no centering gap */
+#now-block {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  gap: 1.2vh;
+  border-top: 1px solid rgba(255,255,255,0.06);
+  padding-top: 2vh;
+}
+
 #now-title {
-  font-size: clamp(3rem, 12vh, 10rem);
+  font-size: clamp(2.5rem, 6vw, 6rem);
   font-weight: 800;
-  line-height: 1.1;
+  line-height: 1.05;
   letter-spacing: -0.02em;
   white-space: nowrap;
   overflow: hidden;
@@ -91,7 +105,7 @@ html, body {
 #progress-bar {
   flex: 1;
   height: clamp(5px, 0.8vh, 12px);
-  background: rgba(238,241,246,0.1);
+  background: rgba(238,241,246,0.08);
   border-radius: 999px;
   position: relative;
   overflow: hidden;
@@ -118,30 +132,104 @@ html, body {
 }
 
 #time-remaining {
-  font-size: clamp(1.2rem, 4vh, 3rem);
+  font-size: clamp(1rem, 2.5vw, 2.2rem);
   font-weight: 600;
-  color: rgba(238,241,246,0.85);
+  color: rgba(238,241,246,0.8);
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
 
-/* ─── UP NEXT AREA ──────────────────────────────────────────────── */
-#next-area {
+/* ─── RIGHT COLUMN: UP NEXT + agenda ────────────────────────────── */
+#col-right {
   display: flex;
   flex-direction: column;
-  gap: 0.5vh;
-  padding: 1.5vh 0;
-  border-top: 1px solid rgba(255,255,255,0.07);
+  padding: 2.5vh 3vw 2.5vh 0;
+  gap: 2vh;
+  border-left: 1px solid rgba(255,255,255,0.06);
+  padding-left: 3vw;
+}
+
+/* UP NEXT block */
+#next-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8vh;
 }
 
 #next-title {
-  font-size: clamp(1.8rem, 6vh, 5rem);
-  font-weight: 600;
-  color: #b4b8c8;
+  font-size: clamp(1.6rem, 4vw, 3.5rem);
+  font-weight: 700;
+  color: #c8ccdb;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: 100%;
+}
+
+/* Agenda block — scrollable list of today's events */
+#agenda-block {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1vh;
+  min-height: 0;
+  border-top: 1px solid rgba(255,255,255,0.06);
+  padding-top: 1.5vh;
+}
+
+#agenda-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6vh;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+  /* Subtle scrollbar */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.1) transparent;
+}
+
+#agenda-list::-webkit-scrollbar { width: 3px; }
+#agenda-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 99px; }
+
+.agenda-item {
+  display: flex;
+  align-items: baseline;
+  gap: 1.2vw;
+  padding: 0.7vh 0;
+  font-size: clamp(0.85rem, 1.8vw, 1.4rem);
+  color: rgba(238,241,246,0.45);
+  transition: color 0.3s ease;
+}
+
+.agenda-item.is-current {
+  color: #fff;
+  font-weight: 600;
+}
+
+.agenda-item.is-past {
+  color: rgba(238,241,246,0.2);
+  text-decoration: line-through;
+  text-decoration-color: rgba(238,241,246,0.1);
+}
+
+.agenda-time {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  font-weight: 500;
+  flex-shrink: 0;
+  min-width: 6.5em;
+}
+
+.agenda-title {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.agenda-item.is-current .agenda-time {
+  color: #a5b4fc;
 }
 
 /* ─── Badges ────────────────────────────────────────────────────── */
@@ -149,15 +237,15 @@ html, body {
   display: flex;
   align-items: center;
   gap: clamp(5px, 0.7vw, 10px);
-  font-size: clamp(0.8rem, 2vh, 1.6rem);
+  font-size: clamp(0.7rem, 1.5vw, 1.2rem);
   font-weight: 600;
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
 
 .badge-dot {
-  width: clamp(7px, 1.2vw, 14px);
-  height: clamp(7px, 1.2vw, 14px);
+  width: clamp(6px, 1vw, 11px);
+  height: clamp(6px, 1vw, 11px);
   border-radius: 50%;
 }
 
@@ -170,25 +258,28 @@ html, body {
   50% { box-shadow: 0 0 18px rgba(129,140,248,1), 0 0 45px rgba(129,140,248,0.5); }
 }
 .now-badge .badge-label { color: #c7d2fe; }
-.now-badge .badge-time  { color: rgba(238,241,246,0.5); font-weight: 400; }
+.now-badge .badge-time  { color: rgba(238,241,246,0.45); font-weight: 400; }
 
 .next-dot { background: #6B7280; }
 .next-badge .badge-label { color: #9CA3AF; }
-.next-badge .badge-time  { color: rgba(238,241,246,0.35); font-weight: 400; }
+.next-badge .badge-time  { color: rgba(238,241,246,0.3); font-weight: 400; }
+
+.agenda-dot { background: rgba(238,241,246,0.2); }
+.agenda-badge .badge-label { color: rgba(238,241,246,0.35); }
 
 /* ─── State variants ────────────────────────────────────────────── */
 #now-title.free-time {
-  color: rgba(238,241,246,0.4);
+  color: rgba(238,241,246,0.35);
   font-weight: 300;
   font-style: italic;
 }
 #now-title.day-complete {
-  color: rgba(74,222,128,0.7);
+  color: rgba(74,222,128,0.6);
   font-weight: 300;
   font-style: italic;
 }
 #next-title.no-next {
-  color: rgba(238,241,246,0.2);
+  color: rgba(238,241,246,0.15);
   font-style: italic;
 }
 
@@ -199,12 +290,8 @@ html, body {
   display: flex; align-items: center; justify-content: center;
   transition: opacity 0.5s ease, visibility 0.5s ease;
 }
-#activate-overlay.hidden {
-  opacity: 0; visibility: hidden; pointer-events: none;
-}
-.activate-content {
-  display: flex; flex-direction: column; align-items: center; gap: 1.5rem;
-}
+#activate-overlay.hidden { opacity: 0; visibility: hidden; pointer-events: none; }
+.activate-content { display: flex; flex-direction: column; align-items: center; gap: 1.5rem; }
 .activate-pulse {
   width: clamp(50px, 10vw, 100px); height: clamp(50px, 10vw, 100px);
   border-radius: 50%;
@@ -225,26 +312,32 @@ html, body {
 #guard-status {
   position: fixed; bottom: 6px; left: 10px; z-index: 9999;
   display: flex; align-items: center; gap: 5px;
-  font-size: 10px; font-family: monospace;
-  color: rgba(238,241,246,0.25);
+  font-size: 10px; font-family: monospace; color: rgba(238,241,246,0.25);
 }
 #guard-status.active { color: rgba(74,222,128,0.7); }
-.guard-dot {
-  width: 6px; height: 6px; border-radius: 50%;
-  background: rgba(238,241,246,0.2);
-}
-#guard-status.active .guard-dot {
-  background: #4ade80; box-shadow: 0 0 5px rgba(74,222,128,0.5);
-}
+.guard-dot { width: 6px; height: 6px; border-radius: 50%; background: rgba(238,241,246,0.2); }
+#guard-status.active .guard-dot { background: #4ade80; box-shadow: 0 0 5px rgba(74,222,128,0.5); }
 #data-status {
   position: fixed; bottom: 6px; right: 10px; z-index: 9999;
-  font-size: 10px; font-family: monospace;
-  color: rgba(238,241,246,0.2);
+  font-size: 10px; font-family: monospace; color: rgba(238,241,246,0.2);
 }
 
-/* ─── Animation ─────────────────────────────────────────────────── */
 .fade-in { animation: fadeIn 0.5s ease forwards; }
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(5px); }
   to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ─── Portrait / small screens: stack vertically ────────────────── */
+@media (max-aspect-ratio: 1/1), (max-width: 700px) {
+  #kiosk {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr;
+  }
+  #col-right {
+    border-left: none;
+    border-top: 1px solid rgba(255,255,255,0.06);
+    padding-left: 3vw;
+  }
+  #clock-display { font-size: clamp(3rem, 18vw, 8rem); }
 }

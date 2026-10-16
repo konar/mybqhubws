@@ -1,10 +1,11 @@
 /* ═══════════════════════════════════════════════════════════════════
    Ambient Kiosk — app.js
-   CSV parser · Timer loop · SleepGuard · localStorage fallback
+   Google Calendar (via Apps Script JSON) · Timer loop · SleepGuard
    ═══════════════════════════════════════════════════════════════════ */
 
 // ─── Configuration ─────────────────────────────────────────────────
-const CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQMqjbvzDcd8XVCtJgn0hdP9-aAthnrfLIKyQxHs5STm3ZwpySVlcnQEMaVyhe9iKx-47J-hFwNy7-X/pub?output=csv';
+// ⚠️  PASTE YOUR APPS SCRIPT WEB APP URL HERE:
+const API_URL = 'https://script.google.com/macros/s/AKfycbz8QgqbviCC-OlzFMXJJa4AG1GeYLDzjN38FZ4L9g5YLU9Db85gOgomE_bxxhDZd1oy/exec';
 const POLL_INTERVAL_MS = 2 * 60 * 1000; // 2 minutes
 const MAX_TASK_CHARS = 35;
 const STORAGE_KEY = 'ambientKiosk_schedule';
@@ -26,6 +27,7 @@ const DOM = {
   timeRemaining: document.getElementById('time-remaining'),
   nextBadgeTime: document.getElementById('next-time-range'),
   nextTitle:     document.getElementById('next-title'),
+  agendaList:    document.getElementById('agenda-list'),
 };
 
 
@@ -147,117 +149,13 @@ const sleepGuard = new SleepGuard();
 
 
 /* ═══════════════════════════════════════════════════════════════════
-   2. CSV Parser
+   2. Schedule Data
+   Apps Script returns JSON with { events: [{ title, start, end,
+   startMin, endMin, allDay }] }. Already sorted & filtered.
    ═══════════════════════════════════════════════════════════════════ */
+let schedule = []; // [{ title, start, end, startMin, endMin }]
 
-/**
- * Parse a CSV string into an array of objects keyed by header names.
- * Handles quoted fields and trims whitespace.
- */
-function parseCSV(raw) {
-  const lines = raw.split(/\r?\n/).filter(l => l.trim().length > 0);
-  if (lines.length < 1) return [];
-
-  const headers = splitCSVLine(lines[0]).map(h => h.trim().toLowerCase());
-  const rows = [];
-
-  for (let i = 1; i < lines.length; i++) {
-    const cols = splitCSVLine(lines[i]);
-    const obj = {};
-    headers.forEach((h, idx) => { obj[h] = (cols[idx] || '').trim(); });
-    rows.push(obj);
-  }
-  return rows;
-}
-
-/** Split a single CSV line respecting quoted fields. */
-function splitCSVLine(line) {
-  const result = [];
-  let current = '';
-  let inQuotes = false;
-
-  for (let i = 0; i < line.length; i++) {
-    const ch = line[i];
-    if (ch === '"') {
-      if (inQuotes && line[i + 1] === '"') {
-        current += '"';
-        i++;
-      } else {
-        inQuotes = !inQuotes;
-      }
-    } else if (ch === ',' && !inQuotes) {
-      result.push(current);
-      current = '';
-    } else {
-      current += ch;
-    }
-  }
-  result.push(current);
-  return result;
-}
-
-
-/* ═══════════════════════════════════════════════════════════════════
-   3. Schedule Data
-   ═══════════════════════════════════════════════════════════════════ */
-let schedule = []; // { day, start, end, task, startMin, endMin }
-
-/**
- * Normalize parsed rows into a sorted schedule with minutes-of-day fields.
- */
-function buildSchedule(rows) {
-  const result = [];
-
-  for (const row of rows) {
-    const dayRaw  = row['day'] || row['date'] || '';
-    const startRaw = row['starttime'] || row['start time'] || row['start'] || '';
-    const endRaw   = row['endtime']   || row['end time']   || row['end']   || '';
-    const task     = row['task'] || row['title'] || row['task title'] || '';
-
-    if (!startRaw || !task) continue; // skip empty rows
-
-    result.push({
-      day:      dayRaw,
-      start:    startRaw,
-      end:      endRaw,
-      task:     task,
-      startMin: timeToMinutes(startRaw),
-      endMin:   timeToMinutes(endRaw),
-    });
-  }
-
-  // Sort by start time
-  result.sort((a, b) => a.startMin - b.startMin);
-  return result;
-}
-
-/**
- * Convert "HH:MM" or "H:MM AM/PM" to minutes-of-day (0-1439).
- */
-function timeToMinutes(str) {
-  if (!str) return 0;
-  str = str.trim().toUpperCase();
-
-  // Try 12-hour format first
-  const ampm = str.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/);
-  if (ampm) {
-    let h = parseInt(ampm[1], 10);
-    const m = parseInt(ampm[2], 10);
-    if (ampm[3] === 'PM' && h !== 12) h += 12;
-    if (ampm[3] === 'AM' && h === 12) h = 0;
-    return h * 60 + m;
-  }
-
-  // 24-hour format
-  const parts = str.split(':');
-  if (parts.length >= 2) {
-    return parseInt(parts[0], 10) * 60 + parseInt(parts[1], 10);
-  }
-
-  return 0;
-}
-
-/** Format minutes-of-day back to "h:mm AM/PM". */
+/** Format minutes-of-day to "h:mm AM/PM". */
 function minutesToDisplay(min) {
   let h = Math.floor(min / 60);
   const m = min % 60;
@@ -268,17 +166,27 @@ function minutesToDisplay(min) {
 
 
 /* ═══════════════════════════════════════════════════════════════════
-   4. Data Fetching & Caching
+   3. Data Fetching & Caching
    ═══════════════════════════════════════════════════════════════════ */
 async function fetchSchedule() {
   try {
-    const url = `${CSV_URL}&_t=${Date.now()}`;
+    // Cache-bust with timestamp
+    const sep = API_URL.includes('?') ? '&' : '?';
+    const url = `${API_URL}${sep}_t=${Date.now()}`;
     const res = await fetch(url);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const text = await res.text();
+    const data = await res.json();
 
-    const rows = parseCSV(text);
-    schedule = buildSchedule(rows);
+    if (data.error) throw new Error(data.error);
+
+    // The Apps Script already returns today's events sorted by startMin
+    schedule = (data.events || []).map(ev => ({
+      title:    ev.title || '',
+      start:    ev.start || '',
+      end:      ev.end || '',
+      startMin: ev.startMin || 0,
+      endMin:   ev.endMin || 0,
+    }));
 
     // Cache to localStorage
     localStorage.setItem(STORAGE_KEY, JSON.stringify(schedule));
@@ -310,27 +218,13 @@ setInterval(fetchSchedule, POLL_INTERVAL_MS);
 
 
 /* ═══════════════════════════════════════════════════════════════════
-   5. Clock & Display Loop
+   4. Clock & Display Loop
    ═══════════════════════════════════════════════════════════════════ */
 
 /** Truncate text to MAX_TASK_CHARS with ellipsis. */
 function truncate(text) {
   if (!text) return '';
   return text.length > MAX_TASK_CHARS ? text.slice(0, MAX_TASK_CHARS - 1) + '…' : text;
-}
-
-/** Get today's day-of-week name (e.g. "Monday"). */
-function todayName() {
-  return new Date().toLocaleDateString('en-US', { weekday: 'long' });
-}
-
-/** Filter schedule to today's tasks. */
-function todayTasks() {
-  const today = todayName().toLowerCase();
-  // If Day column is populated, filter by it; otherwise show all tasks
-  const hasDayCol = schedule.some(t => t.day && t.day.trim().length > 0);
-  if (!hasDayCol) return schedule;
-  return schedule.filter(t => t.day.toLowerCase() === today);
 }
 
 let lastNowKey = '';
@@ -351,7 +245,7 @@ function updateDisplay() {
 
   // ── Find current & next tasks ──
   const currentMin = now.getHours() * 60 + now.getMinutes() + now.getSeconds() / 60;
-  const tasks = todayTasks();
+  const tasks = schedule;  // Apps Script already returns today's events only
 
   let currentTask = null;
   let nextTask = null;
@@ -374,13 +268,13 @@ function updateDisplay() {
   const pastAllTasks = tasks.length > 0 && currentMin >= tasks[tasks.length - 1].endMin;
 
   // ── Render NOW ──
-  const nowKey = currentTask ? currentTask.task + currentTask.start : (pastAllTasks ? '__done__' : '__free__');
+  const nowKey = currentTask ? currentTask.title + currentTask.start : (pastAllTasks ? '__done__' : '__free__');
   const shouldAnimateNow = nowKey !== lastNowKey;
   lastNowKey = nowKey;
 
   if (currentTask) {
     DOM.nowBadgeTime.textContent = `${minutesToDisplay(currentTask.startMin)} – ${minutesToDisplay(currentTask.endMin)}`;
-    DOM.nowTitle.textContent = truncate(currentTask.task);
+    DOM.nowTitle.textContent = truncate(currentTask.title);
     DOM.nowTitle.className = shouldAnimateNow ? 'fade-in' : '';
 
     // Progress
@@ -423,13 +317,13 @@ function updateDisplay() {
   }
 
   // ── Render UP NEXT ──
-  const nextKey = nextTask ? nextTask.task + nextTask.start : '__none__';
+  const nextKey = nextTask ? nextTask.title + nextTask.start : '__none__';
   const shouldAnimateNext = nextKey !== lastNextKey;
   lastNextKey = nextKey;
 
   if (nextTask) {
     DOM.nextBadgeTime.textContent = `${minutesToDisplay(nextTask.startMin)} – ${minutesToDisplay(nextTask.endMin)}`;
-    DOM.nextTitle.textContent = truncate(nextTask.task);
+    DOM.nextTitle.textContent = truncate(nextTask.title);
     DOM.nextTitle.className = shouldAnimateNext ? 'fade-in' : '';
   } else {
     DOM.nextBadgeTime.textContent = '';
@@ -437,45 +331,48 @@ function updateDisplay() {
     DOM.nextTitle.className = 'no-next';
   }
 
+  // ── Render Today's Agenda timeline ──
+  renderAgenda(currentMin);
+
   requestAnimationFrame(updateDisplay);
 }
 
+/** Render all today's events in the right column agenda list. */
+let lastAgendaKey = '';
+function renderAgenda(currentMin) {
+  // Only re-render if schedule changed (avoid DOM thrashing)
+  const agendaKey = schedule.map(t => t.title + t.startMin).join('|') + '|' + Math.floor(currentMin);
+  if (agendaKey === lastAgendaKey) return;
+  lastAgendaKey = agendaKey;
 
-/* ═══════════════════════════════════════════════════════════════════
-   6. Fullscreen — cross-browser, bulletproof
-   ═══════════════════════════════════════════════════════════════════ */
+  DOM.agendaList.innerHTML = '';
+  for (const ev of schedule) {
+    const li = document.createElement('li');
+    li.className = 'agenda-item';
 
-function goFullscreen(el) {
-  if (el.requestFullscreen) return el.requestFullscreen();
-  if (el.webkitRequestFullscreen) return el.webkitRequestFullscreen();
-  if (el.msRequestFullscreen) return el.msRequestFullscreen();
-  return Promise.reject('No fullscreen API');
-}
+    if (currentMin >= ev.endMin) {
+      li.classList.add('is-past');
+    } else if (currentMin >= ev.startMin && currentMin < ev.endMin) {
+      li.classList.add('is-current');
+    }
 
-function exitFullscreen() {
-  if (document.exitFullscreen) return document.exitFullscreen();
-  if (document.webkitExitFullscreen) return document.webkitExitFullscreen();
-  if (document.msExitFullscreen) return document.msExitFullscreen();
-  return Promise.reject('No fullscreen API');
-}
+    const timeSpan = document.createElement('span');
+    timeSpan.className = 'agenda-time';
+    timeSpan.textContent = `${minutesToDisplay(ev.startMin)}`;
 
-function isFullscreen() {
-  return !!(document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement);
-}
+    const titleSpan = document.createElement('span');
+    titleSpan.className = 'agenda-title';
+    titleSpan.textContent = ev.title;
 
-function toggleFullscreen() {
-  if (isFullscreen()) {
-    exitFullscreen().catch(() => {});
-  } else {
-    goFullscreen(document.documentElement).catch((err) => {
-      console.error('[Fullscreen] failed:', err);
-    });
+    li.appendChild(timeSpan);
+    li.appendChild(titleSpan);
+    DOM.agendaList.appendChild(li);
   }
 }
 
 
 /* ═══════════════════════════════════════════════════════════════════
-   7. Interactions — activation & fullscreen
+   5. Fullscreen + Interactions (simplified — matches test.html)
    ═══════════════════════════════════════════════════════════════════ */
 
 function activateGuard() {
@@ -488,20 +385,30 @@ function activateGuard() {
   }
 }
 
-// Overlay: single click activates guard
-DOM.overlay.addEventListener('click', () => activateGuard());
-
-// ENTIRE DOCUMENT: double-click toggles fullscreen
-document.addEventListener('dblclick', (e) => {
-  e.preventDefault();
-  // Fullscreen FIRST — must happen before anything that could throw
-  toggleFullscreen();
-  // Then activate guard (safe — wrapped in try-catch)
+// Overlay: single click → activate guard + enter fullscreen
+DOM.overlay.addEventListener('click', function() {
   activateGuard();
+  var el = document.documentElement;
+  var fn = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
+  if (fn) fn.call(el).catch(function(){});
+});
+
+// Document: double-click → toggle fullscreen (same pattern as test.html)
+document.addEventListener('dblclick', function() {
+  activateGuard();
+  var el = document.documentElement;
+  var isFS = document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement;
+  if (isFS) {
+    var exit = document.exitFullscreen || document.webkitExitFullscreen || document.msExitFullscreen;
+    if (exit) exit.call(document).catch(function(){});
+  } else {
+    var enter = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
+    if (enter) enter.call(el).catch(function(){});
+  }
 });
 
 
 /* ═══════════════════════════════════════════════════════════════════
-   8. Boot
+   6. Boot
    ═══════════════════════════════════════════════════════════════════ */
 requestAnimationFrame(updateDisplay);
